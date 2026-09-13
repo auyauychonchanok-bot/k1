@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>เกมจับผิดภาพสูตรคูณ ป.2 - Battle Arena</title>
+
+  <!-- ไลบรารีสำหรับสร้างเอฟเฟกต์พลุกระดาษ (Confetti) -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.4/dist/confetti.browser.min.js"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body, html {
+      width: 100%;
+      height: 100%;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      overflow: hidden;
+      background: #000;
+    }
+
+    /* ภาพพื้นหลังหลัก - a4_2.jpeg */
+    .bg-layer {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: url('a4_2.jpeg') no-repeat center center/cover;
+      transition: transform 1.2s cubic-bezier(0.25, 1, 0.5, 1), filter 1.2s;
+      z-index: 1;
+    }
+
+    .bg-layer.zoom-in {
+      transform: scale(1.15);
+      filter: brightness(0.85);
+    }
+
+    /* แสงวิบวับและแสงไฟฟ้า */
+    .sparkle-overlay {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 2;
+      background: radial-gradient(circle, rgba(255,255,255,0.15) 10%, transparent 20%),
+                  radial-gradient(circle, rgba(0,212,255,0.1) 15%, transparent 25%);
+      background-size: 80px 80px, 120px 120px;
+      animation: sparkleAnim 3s infinite linear;
+    }
+
+    @keyframes sparkleAnim {
+      0% { background-position: 0 0, 0 0; opacity: 0.6; }
+      50% { opacity: 1; filter: drop-shadow(0 0 10px #00d4ff); }
+      100% { background-position: 80px 80px, 120px 120px; opacity: 0.6; }
+    }
+
+    /* ปุ่มสวิตช์เปิด-ปิดเสียง */
+    .audio-control-btn {
+      position: absolute;
+      top: 15px;
+      right: 15px;
+      z-index: 50;
+      background: rgba(15, 15, 35, 0.9);
+      border: 2px solid #00d4ff;
+      border-radius: 50px;
+      padding: 10px 18px;
+      color: #fff;
+      font-size: 1.1rem;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 0 10px #00d4ff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: transform 0.2s;
+    }
+
+    .audio-control-btn:hover {
+      transform: scale(1.05);
+    }
+
+    /* ---------------- หน้าแรก (Start Screen) ---------------- */
+    #start-screen {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      background: rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(3px);
+      transition: opacity 0.8s ease;
+    }
+
+    .title-box {
+      background: rgba(15, 15, 35, 0.85);
+      padding: 35px 50px;
+      border-radius: 20px;
+      border: 3px solid #00d4ff;
+      box-shadow: 0 0 30px #00d4ff, inset 0 0 15px #00d4ff;
+      text-align: center;
+      color: #fff;
+    }
+
+    .title-box h1 {
+      font-size: 2.8rem;
+      text-shadow: 0 0 15px #ff0055, 0 0 25px #00d4ff;
+      margin-bottom: 15px;
+    }
+
+    .title-box p {
+      font-size: 1.2rem;
+      color: #e0e0e0;
+      margin-bottom: 25px;
+      line-height: 1.6;
+    }
+
+    .btn-start {
+      padding: 15px 40px;
+      font-size: 1.5rem;
+      font-weight: bold;
+      color: #fff;
+      background: linear-gradient(45deg, #ff0055, #ff9900);
+      border: none;
+      border-radius: 50px;
+      cursor: pointer;
+      box-shadow: 0 0 20px #ff0055;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .btn-start:hover {
+      transform: scale(1.08);
+      box-shadow: 0 0 35px #ff9900;
+    }
+
+    /* ---------------- หน้าสนามเกม (Game Arena) ---------------- */
+    #game-screen {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      z-index: 5;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 1s ease;
+    }
+
+    #game-screen.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .header-bar {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+      background: rgba(10, 10, 25, 0.85);
+      padding: 12px 30px;
+      border-radius: 20px;
+      border: 2px solid #ff0055;
+      box-shadow: 0 0 15px #ff0055;
+      color: #fff;
+      margin-bottom: 15px;
+    }
+
+    .header-bar h2 {
+      font-size: 1.5rem;
+      color: #ffff00;
+      text-shadow: 0 0 10px #ff0055;
+    }
+
+    .header-bar .timer-text {
+      font-size: 1.3rem;
+      font-weight: bold;
+    }
+
+    /* กระดาน 9 ภาพ (Grid 3x3) */
+    .grid-container {
+      display: grid;
+      grid-template-columns: repeat(3, 180px);
+      grid-template-rows: repeat(3, 105px);
+      gap: 15px;
+      justify-content: center;
+      align-content: center;
+    }
+
+    .card {
+      position: relative;
+      width: 180px;
+      height: 105px;
+      background: rgba(20, 25, 50, 0.9);
+      border: 3px solid #00d4ff;
+      border-radius: 12px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      cursor: pointer;
+      user-select: none;
+      box-shadow: 0 0 12px rgba(0, 212, 255, 0.4);
+      transition: background-color 0.2s, border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .card .equation-text {
+      font-size: 1.45rem;
+      font-weight: bold;
+      color: #ffffff;
+      text-align: center;
+      line-height: 1.2;
+    }
+
+    .card .answer-label {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: bold;
+      margin-top: 5px;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    .card:hover {
+      box-shadow: 0 0 22px #00d4ff;
+      border-color: #ffffff;
+    }
+
+    .card.selected {
+      background: rgba(255, 153, 0, 0.9);
+      border-color: #ffff00;
+      box-shadow: 0 0 20px #ffff00;
+      animation: pulseSelect 0.8s infinite alternate;
+    }
+
+    @keyframes pulseSelect {
+      from { box-shadow: 0 0 10px #ffff00; }
+      to { box-shadow: 0 0 25px #ff0055; }
+    }
+
+    /* สไตล์การเฉลยใหม่: คูณถูกเป็นสีเขียว / คูณผิดเป็นสีแดง */
+    .card.review-correct {
+      background: rgba(39, 174, 96, 0.95) !important;
+      border: 3px solid #2ecc71 !important;
+      box-shadow: 0 0 15px #2ecc71 !important;
+    }
+
+    .card.review-correct .answer-label {
+      color: #ffffff;
+    }
+
+    .card.review-wrong {
+      background: rgba(192, 57, 43, 0.95) !important;
+      border: 3px solid #e74c3c !important;
+      box-shadow: 0 0 15px #e74c3c !important;
+    }
+
+    .card.review-wrong .answer-label {
+      color: #ffea00;
+    }
+
+    .btn-submit {
+      margin-top: 15px;
+      padding: 12px 35px;
+      font-size: 1.25rem;
+      font-weight: bold;
+      color: #fff;
+      background: linear-gradient(45deg, #00c853, #b2ff59);
+      border: none;
+      border-radius: 30px;
+      cursor: pointer;
+      box-shadow: 0 0 20px #00c853;
+      transition: transform 0.2s;
+    }
+
+    .btn-submit:hover {
+      transform: scale(1.06);
+    }
+
+    /* หน้าต่างสรุปผล */
+    #result-modal {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.85);
+      z-index: 20;
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      color: #fff;
+    }
+
+    .modal-box {
+      background: rgba(15, 15, 35, 0.95);
+      border: 3px solid #ff0055;
+      padding: 35px 45px;
+      border-radius: 20px;
+      text-align: center;
+      box-shadow: 0 0 30px #ff0055;
+      max-width: 480px;
+      width: 90%;
+    }
+
+    .modal-box h2 { font-size: 2.5rem; margin-bottom: 10px; }
+    .modal-box .score-text { font-size: 3rem; margin: 15px 0; font-weight: bold; }
+    .modal-box p { font-size: 1.2rem; margin-bottom: 25px; color: #e0e0e0; line-height: 1.5; }
+
+    .modal-box button {
+      padding: 12px 24px;
+      font-size: 1.1rem;
+      margin: 6px;
+      border-radius: 25px;
+      border: none;
+      cursor: pointer;
+      font-weight: bold;
+      transition: transform 0.2s;
+    }
+
+    .modal-box button:hover {
+      transform: scale(1.05);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="bg-layer" id="bg-layer"></div>
+  <div class="sparkle-overlay"></div>
+
+  <!-- ปุ่มเปิด-ปิดเสียง -->
+  <button class="audio-control-btn" id="mute-btn" onclick="toggleAudio();">
+    <span id="mute-icon">🔊</span> <span id="mute-text">เสียง: เปิด</span>
+  </button>
+
+  <!-- หน้าแรก -->
+  <div id="start-screen">
+    <div class="title-box">
+      <h1>⚔️ ดวลสูตรคูณ ป.2 ⚔️</h1>
+      <p>มองหาภาพสมการที่ <b>"คูณถูกต้อง"</b> จากทั้ง 9 ภาพ<br><b>เงื่อนไข:</b> ต้องตอบถูกต้องครบถ้วนทั้ง 9 ภาพเท่านั้นถึงจะผ่าน!</p>
+      <button class="btn-start" onclick="playClickSound(); startGame();">⚡ เริ่มภารกิจ ⚡</button>
+    </div>
+  </div>
+
+  <!-- หน้าสนามเกม -->
+  <div id="game-screen">
+    <div class="header-bar">
+      <h2>❓ ข้อใดถูกบ้าง? (เลือกเฉพาะข้อที่คูณถูกต้อง)</h2>
+      <div class="timer-text">⏱️ เวลาเหลือ: <span id="timer" style="color: #ff0055;">02:00</span></div>
+    </div>
+
+    <div class="grid-container" id="grid"></div>
+
+    <button class="btn-submit" id="submit-btn" onclick="playClickSound(); submitAnswer();">🚀 ส่งคำตอบ / ตรวจสอบผลลัพธ์</button>
+    <button class="btn-submit" id="retry-btn" style="display: none; background: linear-gradient(45deg, #ff0055, #ff9900);" onclick="playClickSound(); restartGame();">🔄 เล่นรอบใหม่ (เปลี่ยนโจทย์)</button>
+  </div>
+
+  <!-- หน้าต่างสรุปผล ผ่าน / ไม่ผ่าน -->
+  <div id="result-modal">
+    <div class="modal-box" id="modal-box-elem">
+      <h2 id="modal-title">ผลการทดสอบ</h2>
+      <div class="score-text" id="modal-status">ผ่าน</div>
+      <p id="modal-desc">คำอธิบาย</p>
+
+      <div id="modal-actions">
+        <!-- ปุ่มปรับเปลี่ยนตามผลลัพธ์ -->
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let cardsData = [];
+    let timeLeft = 120;
+    let timerInterval = null;
+    let isGameActive = false;
+    let isMuted = false;
+
+    // ---------------- ระบบเสียง Audio Synthesizer ----------------
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    let audioCtx = null;
+    let bgmInterval = null;
+
+    function initAudioContext() {
+      if (!audioCtx) {
+        audioCtx = new AudioContext();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+    }
+
+    function toggleAudio() {
+      initAudioContext();
+      isMuted = !isMuted;
+      const icon = document.getElementById('mute-icon');
+      const text = document.getElementById('mute-text');
+      
+      if (isMuted) {
+        icon.innerText = '🔇';
+        text.innerText = 'เสียง: ปิด';
+        stopBGM();
+      } else {
+        icon.innerText = '🔊';
+        text.innerText = 'เสียง: เปิด';
+        if (isGameActive) startBGM();
+      }
+    }
+
+    function playClickSound() {
+      initAudioContext();
+      if (isMuted || !audioCtx) return;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(600, audioCtx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(150, audioCtx.currentTime + 0.08);
+      gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.08);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.08);
+    }
+
+    function playCountdownBeep(isFinal = false) {
+      initAudioContext();
+      if (isMuted || !audioCtx) return;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = isFinal ? 'sawtooth' : 'triangle';
+      osc.frequency.setValueAtTime(isFinal ? 880 : 440, audioCtx.currentTime); 
+      gain.gain.setValueAtTime(0.25, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + (isFinal ? 0.4 : 0.15));
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + (isFinal ? 0.4 : 0.15));
+    }
+
+    function startBGM() {
+      stopBGM();
+      if (isMuted) return;
+      initAudioContext();
+
+      const notes = [261.63, 329.63, 392.00, 523.25, 392.00, 329.63, 293.66, 349.23, 440.00, 587.33, 440.00, 349.23];
+      let noteIndex = 0;
+
+      bgmInterval = setInterval(() => {
+        if (isMuted || !audioCtx) return;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(notes[noteIndex], audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.03, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.18);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.18);
+
+        noteIndex = (noteIndex + 1) % notes.length;
+      }, 200);
+    }
+
+    function stopBGM() {
+      if (bgmInterval) {
+        clearInterval(bgmInterval);
+        bgmInterval = null;
+      }
+    }
+
+    function triggerFireworks() {
+      const duration = 3 * 1000;
+      const animationEnd = Date.now() + duration;
+      const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 999 };
+
+      function randomInRange(min, max) { return Math.random() * (max - min) + min; }
+
+      const interval = setInterval(function() {
+        const timeLeft = animationEnd - Date.now();
+        if (timeLeft <= 0) return clearInterval(interval);
+        const particleCount = 50 * (timeLeft / duration);
+        confetti(Object.assign({}, defaults, { particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } }));
+        confetti(Object.assign({}, defaults, { particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } }));
+      }, 250);
+    }
+
+    function getRandomInt(min, max) {
+      return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+
+    function startGame() {
+      document.getElementById('start-screen').style.opacity = '0';
+      document.getElementById('bg-layer').classList.add('zoom-in');
+
+      setTimeout(() => {
+        document.getElementById('start-screen').style.display = 'none';
+        document.getElementById('game-screen').classList.add('active');
+        initGame();
+      }, 800);
+    }
+
+    function initGame() {
+      clearInterval(timerInterval);
+      timeLeft = 120;
+      cardsData = [];
+      isGameActive = true;
+      document.getElementById('submit-btn').style.display = 'inline-block';
+      document.getElementById('retry-btn').style.display = 'none';
+
+      const grid = document.getElementById('grid');
+      grid.innerHTML = '';
+
+      const correctCountTarget = getRandomInt(3, 6);
+      let correctCreated = 0;
+
+      for (let i = 0; i < 9; i++) {
+        const num1 = getRandomInt(2, 12);
+        const num2 = getRandomInt(1, 12);
+        const correctAnswer = num1 * num2;
+        
+        let isCorrectEquation = true;
+        let displayAnswer = correctAnswer;
+
+        if ((correctCreated < correctCountTarget && Math.random() < 0.5) || (9 - i <= correctCountTarget - correctCreated)) {
+          isCorrectEquation = true;
+          correctCreated++;
+        } else {
+          isCorrectEquation = false;
+          let offset = getRandomInt(1, 4) * (Math.random() < 0.5 ? 1 : -1);
+          displayAnswer = correctAnswer + offset;
+          if (displayAnswer <= 0 || displayAnswer === correctAnswer) displayAnswer = correctAnswer + 2;
+        }
+
+        cardsData.push({
+          id: i,
+          num1: num1,
+          num2: num2,
+          correctAnswer: correctAnswer,
+          displayAnswer: displayAnswer,
+          isCorrectEquation: isCorrectEquation,
+          isSelected: false
+        });
+      }
+
+      cardsData.forEach((card, index) => {
+        const cardElem = document.createElement('div');
+        cardElem.className = 'card';
+        cardElem.id = `card-${index}`;
+        cardElem.innerHTML = `<div class="equation-text">${card.num1} × ${card.num2} = ${card.displayAnswer}</div>`;
+        cardElem.onclick = () => {
+          playClickSound();
+          toggleSelect(index, cardElem);
+        };
+        grid.appendChild(cardElem);
+      });
+
+      startTimer();
+      startBGM();
+    }
+
+    function toggleSelect(index, element) {
+      if (!isGameActive) return;
+      cardsData[index].isSelected = !cardsData[index].isSelected;
+      if (cardsData[index].isSelected) {
+        element.classList.add('selected');
+      } else {
+        element.classList.remove('selected');
+      }
+    }
+
+    function startTimer() {
+      timerInterval = setInterval(() => {
+        timeLeft--;
+        let minutes = Math.floor(timeLeft / 60);
+        let seconds = timeLeft % 60;
+        document.getElementById('timer').innerText = 
+          `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+
+        if (timeLeft <= 10 && timeLeft > 0) {
+          playCountdownBeep(false);
+        }
+
+        if (timeLeft <= 0) {
+          clearInterval(timerInterval);
+          playCountdownBeep(true);
+          submitAnswer();
+        }
+      }, 1000);
+    }
+
+    // ---------------- ระบบคิดผลลัพธ์: ผ่าน / ไม่ผ่าน ----------------
+    function submitAnswer() {
+      clearInterval(timerInterval);
+      stopBGM();
+      isGameActive = false;
+
+      let totalCorrectAnswers = 0;
+
+      cardsData.forEach(card => {
+        if (card.isCorrectEquation === card.isSelected) {
+          totalCorrectAnswers++;
+        }
+      });
+
+      const isPassed = (totalCorrectAnswers === 9);
+      const modalBox = document.getElementById('modal-box-elem');
+      const actionsElem = document.getElementById('modal-actions');
+
+      if (isPassed) {
+        modalBox.style.borderColor = '#2ecc71';
+        modalBox.style.boxShadow = '0 0 30px #2ecc71';
+        document.getElementById('modal-title').innerText = '🎉 ยินดีด้วย!';
+        document.getElementById('modal-status').innerHTML = '<span style="color: #2ecc71;">ผ่านเกณฑ์</span>';
+        document.getElementById('modal-desc').innerText = 'คุณระบุข้อถูกต้องและละเว้นข้อที่ผิดครบถ้วนทั้ง 9 ภาพ สมบูรณ์แบบมาก!';
+        
+        actionsElem.innerHTML = `
+          <button style="background: #00d4ff; color: #000;" onclick="playClickSound(); closeModalAndReview();">🔍 ดูเฉลย 9 ภาพ</button>
+          <button style="background: #2ecc71; color: #fff;" onclick="playClickSound(); restartGame();">⚡ ลุยด่านต่อไป (เริ่มรอบใหม่)</button>
+        `;
+        triggerFireworks();
+      } else {
+        modalBox.style.borderColor = '#ff0055';
+        modalBox.style.boxShadow = '0 0 30px #ff0055';
+        document.getElementById('modal-title').innerText = '💥 เสียใจด้วย!';
+        document.getElementById('modal-status').innerHTML = '<span style="color: #ff0055;">ไม่ผ่าน</span>';
+        document.getElementById('modal-desc').innerText = 'ไม่ผ่าน เพราะตอบไม่ครบ หรือตอบผิดอยู่นั่นเอง';
+        
+        actionsElem.innerHTML = `
+          <button style="background: #ff0055; color: #fff;" onclick="playClickSound(); restartGame();">🔄 เล่นใหม่ทันที</button>
+          <button style="background: #00d4ff; color: #000;" onclick="playClickSound(); closeModalAndReview();">🔍 ดูเฉลยว่าผิดตรงไหน</button>
+        `;
+      }
+
+      document.getElementById('result-modal').style.display = 'flex';
+    }
+
+    // ---------------- ฟังก์ชันแสดงเฉลย: ถูกเป็นเขียว / ผิดเป็นแดง ----------------
+    function closeModalAndReview() {
+      document.getElementById('result-modal').style.display = 'none';
+      document.getElementById('submit-btn').style.display = 'none';
+      document.getElementById('retry-btn').style.display = 'inline-block';
+
+      cardsData.forEach((card, index) => {
+        const cardElem = document.getElementById(`card-${index}`);
+        cardElem.classList.remove('selected');
+
+        if (card.isCorrectEquation) {
+          // ข้อที่สมการคูณถูกต้อง -> สีเขียว
+          cardElem.classList.add('review-correct');
+          cardElem.innerHTML = `
+            <div class="equation-text">${card.num1} × ${card.num2} = ${card.displayAnswer}</div>
+            <span class="answer-label">✓ คูณถูกต้อง</span>
+          `;
+        } else {
+          // ข้อที่สมการคูณผิด -> สีแดง
+          cardElem.classList.add('review-wrong');
+          cardElem.innerHTML = `
+            <div class="equation-text">${card.num1} × ${card.num2} = ${card.displayAnswer}</div>
+            <span class="answer-label">✗ ผิด (ถูกคือ ${card.correctAnswer})</span>
+          `;
+        }
+      });
+    }
+
+    function restartGame() {
+      document.getElementById('result-modal').style.display = 'none';
+      initGame();
+    }
+  </script>
+</body>
+</html>
